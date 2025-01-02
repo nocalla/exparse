@@ -127,12 +127,12 @@ def parse_dosing_sets(file: Path) -> pd.DataFrame:
         pd.to_numeric,
         errors="ignore",
     )
-    print(df.dtypes)
+    # print(df.dtypes)
     # drop rows and columns where all values are missing
     df.dropna(axis="index", how="all", inplace=True)
     df.dropna(axis="columns", how="all", inplace=True)
 
-    print(df.head())  # debug
+    # print(df.head())  # debug
 
     return df
 
