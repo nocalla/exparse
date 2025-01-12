@@ -2,12 +2,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from exparse.common_functions import (
+from .common_functions import (
+    file_to_dataframe,
     infer_table_structure,
     parse_table_from_text,
 )
-
-from .common_functions import debug_test_dataframe, file_to_dataframe
 
 
 def parse_conflicts(file: Path) -> pd.DataFrame:
@@ -24,14 +23,13 @@ def parse_conflicts(file: Path) -> pd.DataFrame:
             "Dose Checking",
             [
                 "Use Dose Range Checking",
-                "PRN Checks",  # TODO - check if this is a heading or an actual setting
                 "Dose Range Check Requires Override",
                 "Restrict PRN Dose Checks",
                 "Restrict Frequency Checks",
                 "Allowed Low Rounding Percent",
                 "Allowed Max Rounding Percent",
                 "Restrict General Warnings",
-                "Restrict Dose Type",
+                "Restrict Dose Type",  # TODO modify this - the Default parameter is attached within the schedule to a dose type
                 "Restrict Dose Range Check to Dose Type",
             ],
         ],
@@ -45,24 +43,37 @@ def parse_conflicts(file: Path) -> pd.DataFrame:
             ],
         ],
         [
-            "Preferences",
+            "Visit Med Preferences",
             [
-                "Allow Interaction Auto-Override",  # TODO need to fix for visit & discharge meds
+                "Allow Interaction Auto-Override Acute",
                 "Check Against DC'd Orders",
                 "DC'd Within How Many Days",
                 "Check Interactions Against Home Medications",
                 "Check Duplicates Against Home Medications",
                 "Stop Checking Home Medications After LOS Days",
-                ### Inpt/OBS Visits - check the allocation of sections here
                 "Exclude Medications on Other Visits from Interaction Checks",
                 "Exclude Medications on Other Visits from Duplicate Checks",
                 "Exclude Medications on Other Visits after LOS Days",
+                "Hide Comments When Not Required",
+            ],
+        ],
+        [
+            "Discharge Home Med Preferences",
+            [
+                "Allow Interaction Auto-Override Amb",
                 "Exclude Acute Medications on Same Visit from Interaction Checks",
                 "Exclude Acute Medications on Same Visit from Duplicate Checks",
-                ### Allergy Checking
+            ],
+        ],
+        [
+            "Allergy Checking Preferences",
+            [
                 "Check Supplemental Allergens",
-                "Hide Comments When Not Required",
-                ### immunisation
+            ],
+        ],
+        [
+            "Immunisation Preferences",
+            [
                 "Check Immunization Conflicts",
                 "Immunization Conflict Requires Override",
                 "Check Immunization Schedule Conflicts",
@@ -110,6 +121,10 @@ def parse_conflicts(file: Path) -> pd.DataFrame:
         (
             r"(Schedule)(\s+)(Dose Type)(\s+)(Default)(\s+)(Dose Type)(\s+)(Default)",
             r"\1\2\3\4\5\6Outpatient \7\8Outpatient \9",
+        ),
+        (
+            r"(Allow Interaction Auto-Override)(\s+)(\d+|Yes|No)?(\s+)(Allow Interaction Auto-Override)",
+            r"\1 Acute\2\3\4\5 Amb",
         ),
     ]
 
@@ -178,7 +193,10 @@ def parse_conflicts(file: Path) -> pd.DataFrame:
         "Drug Screening Warnings",
         "Problem Status to Include in Screening",
         "Drug Screening",
-        "Preferences",
+        "Visit Med Preferences",
+        "Discharge Home Med Preferences",
+        "Allergy Checking Preferences",
+        "Immunisation Preferences",
     ]
     df = df.reindex(
         columns=pd.MultiIndex.from_tuples(
@@ -189,7 +207,7 @@ def parse_conflicts(file: Path) -> pd.DataFrame:
     # transpose dataframe
     df = df.T
 
-    debug_test_dataframe(df, show_index=True)
+    # debug_test_dataframe(df, show_index=True)
     return df
 
 
