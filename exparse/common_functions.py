@@ -1,6 +1,10 @@
 import re
 from pathlib import Path
 
+import pandas as pd
+import xlwings as xw
+
+
 def file_to_dataframe(
     file: Path, headings: list[str], id:str, replace: list[tuple[str, str]]
 ):
@@ -86,6 +90,8 @@ def debug_test_current_data(text: str, error_flag: bool = False) -> None:
         f.write(text)
     if error_flag:
         raise NotImplementedError
+
+
 def debug_test_dataframe(
     df: pd.DataFrame | pd.Series,
     error_flag: bool = False,
