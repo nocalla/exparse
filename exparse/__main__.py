@@ -46,7 +46,7 @@ def export_dfs_to_excel(dfs: list[tuple]) -> None:
     output_path = Path("output", filename)
     with pd.ExcelWriter(output_path) as writer:
         for sheetname, df in dfs:
-            df.to_excel(writer, sheet_name=sheetname, index=False)
+            df.to_excel(writer, sheet_name=sheetname)
 
 
 def main() -> None:
