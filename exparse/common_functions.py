@@ -6,7 +6,7 @@ import xlwings as xw
 
 
 def file_to_dataframe(
-    file: Path, headings: list[str], id:str, replace: list[tuple[str, str]]
+    file: Path, headings: list[str], id: str, replace: list[tuple[str, str]]
 ):
     # Regex patterns to match headers and blank lines
     COMMON_CLEANUP_REGEX = [
@@ -163,3 +163,108 @@ def close_excel_workbook_if_open(filepath: Path) -> None:
         except OSError:
             # If a workbook has no associated file, skip it
             continue
+
+
+def infer_table_structure(
+    table_text: str,
+) -> tuple[list[str], list[str], list[int]]:
+    """
+    Infer the column headers, content lines, and column boundaries from a string containing a table.
+
+    :param subtable_text: String containing the table to parse.
+    :type subtable_text: str
+    :return: Tuple containing the headers, content lines, and column boundaries.
+    :rtype: tuple[list[str], list[str], list[int]]
+    """
+    lines = table_text.strip().split("\n")
+    header_line = lines[0]
+    content_lines = lines[1:]
+    longest_line_length = max([len(line) for line in lines])
+
+    # Match words with optional spaces between them, followed by at least 2 whitespaces or the last heading
+    pattern = r"\S+(?: \S+)*(?=\s{2,})|\S+(?: \S+)*$"
+
+    # This will match each heading as a sequence of non-whitespace characters
+    headings = re.finditer(pattern, header_line)
+
+    # Get the start index for each heading
+    column_starts = [match.start() for match in headings]
+
+    column_boundaries = column_starts + [
+        longest_line_length
+    ]  # Add end boundary
+
+    # Extract headers by slicing the header line
+    headers = [
+        header_line[start:end].strip()
+        for start, end in zip(column_boundaries[:-1], column_boundaries[1:])
+    ]
+
+    return headers, content_lines, column_boundaries
+
+
+def process_dataframe_linebreaks(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Account for linebreaks within cells by merging values in all columns up to the previous row if the first column is empty.
+
+    :param df: Dataframe to process
+    :type df: pd.DataFrame
+    :return: Processed dataframe
+    :rtype: pd.DataFrame
+    """
+    # account for linebreaks within cells by merging value up to the previous row
+    # Fill empty cells in the first column with the previous value
+    first_col_name = df.columns[0]
+    df[first_col_name] = df[first_col_name].replace("", pd.NA).ffill()
+    # Concatenate values across all columns based on the first column
+    for col in df.columns[1:]:
+        df[col] = df.groupby(first_col_name)[col].transform(
+            lambda x: " ".join(x.dropna())
+        )
+    # Drop rows where the first column was originally empty
+    df = df.dropna(subset=[df.columns[0]])
+    # Reset the index for a cleaner result
+    df.reset_index(drop=True, inplace=True)
+    return df
+
+
+def parse_table_from_text(
+    headers: list[str],
+    content_lines: list[str],
+    column_boundaries: list[int],
+    account_for_linebreaks: bool = True,
+    exclude_columns: list[str] = [],
+) -> pd.DataFrame:
+    """
+    Parse a table from text using the provided headers, content lines, and column boundaries.
+
+    :param headers: list of column headers
+    :type headers: list[str]
+    :param content_lines: list of lines containing the table content
+    :type content_lines: list[str]
+    :param column_boundaries: list of integers representing the column boundaries
+    :type column_boundaries: list[int]
+    :param account_for_linebreaks: whether or not to account for linebreaks within cells, defaults to True
+    :type account_for_linebreaks: bool, optional
+    :param exclude_columns: list of columns to ignore from table, defaults to an empty list
+    :type account_for_linebreaks: list, optional
+    :return: Dataframe containing the parsed table
+    :rtype: pd.DataFrame
+    """
+
+    rows = []
+    for line in content_lines:
+        row = [
+            line[start:end].strip()
+            for start, end in zip(
+                column_boundaries[:-1], column_boundaries[1:]
+            )
+        ]
+        rows.append(row)
+
+    # Convert to DataFrame
+    df = pd.DataFrame(rows, columns=headers)
+    df.drop(labels=exclude_columns, axis=1, errors="ignore", inplace=True)
+    if account_for_linebreaks:
+        df = process_dataframe_linebreaks(df)
+    return df
