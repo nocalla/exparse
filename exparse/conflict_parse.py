@@ -1,7 +1,11 @@
-import re
 from pathlib import Path
 
 import pandas as pd
+
+from exparse.common_functions import (
+    infer_table_structure,
+    parse_table_from_text,
+)
 
 from .common_functions import debug_test_dataframe, file_to_dataframe
 
@@ -214,66 +218,3 @@ def parse_subtables(
         on="Mnemonic",
     )
     return final_df, new_parent_pairings
-
-
-def infer_columns(subtable_text):
-    """
-    Infer column boundaries by identifying the spaces between headings in the first row.
-    """
-    lines = subtable_text.strip().split("\n")
-    header_line = lines[0]
-    content_lines = lines[1:]
-    longest_line_length = max([len(line) for line in lines])
-
-    # Match words with optional spaces between them, followed by at least 2 whitespaces or the last heading
-    pattern = r"\S+(?: \S+)*(?=\s{2,})|\S+(?: \S+)*$"
-
-    # This will match each heading as a sequence of non-whitespace characters
-    headings = re.finditer(pattern, header_line)
-
-    # Get the start index for each heading
-    column_starts = [match.start() for match in headings]
-
-    column_boundaries = column_starts + [
-        longest_line_length
-    ]  # Add end boundary
-
-    # Extract headers by slicing the header line
-    headers = [
-        header_line[start:end].strip()
-        for start, end in zip(column_boundaries[:-1], column_boundaries[1:])
-    ]
-
-    return headers, content_lines, column_boundaries
-
-
-def parse_subtable(headers, content_lines, column_boundaries) -> pd.DataFrame:
-    """
-    Parse the subtable dynamically based on inferred column boundaries.
-    """
-    rows = []
-    for line in content_lines:
-        row = [
-            line[start:end].strip()
-            for start, end in zip(
-                column_boundaries[:-1], column_boundaries[1:]
-            )
-        ]
-        rows.append(row)
-
-    # Convert to DataFrame
-    df = pd.DataFrame(rows, columns=headers)
-    # account for linebreaks within cells
-    # Fill empty cells in the first column with the previous value
-    first_col_name = df.columns[0]
-    df[first_col_name] = df[first_col_name].replace("", pd.NA).ffill()
-    # Concatenate values across all columns based on the first column
-    for col in df.columns[1:]:
-        df[col] = df.groupby(first_col_name)[col].transform(
-            lambda x: " ".join(x.dropna())
-        )
-    # Drop rows where the first column was originally empty
-    df = df.dropna(subset=[df.columns[0]])
-    # Reset the index for a cleaner result
-    df.reset_index(drop=True, inplace=True)
-    return df
