@@ -1,9 +1,8 @@
-import re
 from pathlib import Path
 
 import pandas as pd
 
-from .common_functions import regex_substitution
+from .common_functions import file_to_dataframe
 
 
 def parse_directions(file: Path) -> pd.DataFrame:
@@ -31,41 +30,16 @@ def parse_directions(file: Path) -> pd.DataFrame:
         "MPD",
     ]
 
-    # Read the text file
-    with open(file, "r") as f:
-        data = f.read()
-
-    # cleanup file
-    # Regex patterns to match headers and blank lines
     patterns = [
-        (r"\*LIVE\* .*\n.*\n.*", ""),
         (r"^Facility.*", ""),
         (r"^\s*\n", ""),
         ("Day Schedule Display", "DayScheduleDisplay"),
         (r"(Mnemonic.*?)(\s+)Name", r"\1\2Direction Name"),
         (r"(Location.*?)(\s+)Name", r"\1\2Equiv Name"),
     ]
-
-    data = regex_substitution(data, patterns)
-    # split the data into directions groups
-    groups = re.split(r"(?=Mnemonic)", data)
-
-    heading_pattern = "|".join(re.escape(key) for key in HEADINGS)
-    all_indications = list()
-    for group in groups:
-        # capture data to a dict using a list of headings
-        split_data = re.split(r"(" + heading_pattern + r")", group)
-        string_dict = dict()
-        current_key = None
-        for part in split_data:
-            if part in HEADINGS:
-                current_key = part
-            elif current_key:
-                string_dict[current_key] = part.strip()
-                current_key = None
-        all_indications.append(string_dict)
-
-    df = pd.DataFrame(all_indications)
+    df = file_to_dataframe(
+        file=file, id="Mnemonic", headings=HEADINGS, replace=patterns
+    )
     df.dropna(how="all", axis="index", inplace=True)
 
     facilities = ["MPAC", "MPAD", "MPC", "MPD"]
@@ -118,17 +92,18 @@ def parse_directions(file: Path) -> pd.DataFrame:
         facility_df["Time"] = facility_df.groupby(["Mnemonic", "Application"])[
             "Time"
         ].transform(lambda x: ", ".join(x))
-        # remove facility detail column
-        facility_df.drop(columns=facility, inplace=True)
-
+        # remove duplicate rows
+        facility_df.drop_duplicates(
+            subset=["Mnemonic", "Application"], inplace=True
+        )
         # add this facility's data to the list of facilities
         facilities_df = pd.concat([facilities_df, facility_df])
 
-    # remove duplicate rows
-    facilities_df.drop_duplicates(inplace=True)
-
+    # remove facility detail column
+    facilities_df.drop(columns=facilities, inplace=True)
+    df.drop(columns=facilities, inplace=True)
     # merge facility specific data back to main direction data
-    df = pd.merge(df, facilities_df, how="outer", on="Mnemonic")
+    df = pd.merge(df, facilities_df, how="left", on="Mnemonic")
 
     # remove leading and trailing whitespace for entire dataframe
     for col in df.columns:
