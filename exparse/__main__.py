@@ -2,14 +2,18 @@ from pathlib import Path
 
 import pandas as pd
 
+from .conflict_parse import parse_conflicts
 from .direction_parse import parse_directions
 from .dosing_set_parse import parse_dosing_sets
 from .order_string_parse import parse_order_strings
+from .outside_location_parse import parse_locations
 
 SEARCH_FILENAMES = {
     "dosing_sets": ["dosing", parse_dosing_sets],
     "order_strings": ["order_string", parse_order_strings],
     "directions": ["direction", parse_directions],
+    "outside_locations": ["location", parse_locations],
+    "conflicts": ["conflict", parse_conflicts],
 }
 
 
