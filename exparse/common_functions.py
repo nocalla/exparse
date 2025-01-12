@@ -86,3 +86,74 @@ def debug_test_current_data(text: str, error_flag: bool = False) -> None:
         f.write(text)
     if error_flag:
         raise NotImplementedError
+def debug_test_dataframe(
+    df: pd.DataFrame | pd.Series,
+    error_flag: bool = False,
+    format: str = "xlsx",
+    show_index: bool = False,
+) -> None:
+    """
+    Debugging function to test the current state of a dataframe being worked on
+    by writing it to an Excel file.
+
+    :param data: the dataframe or series to be written to the file
+    :type data: str
+    :param error_flag: whether or not to raise an error on calling the function
+    :type error_flag: bool
+    :param format: the file extension to use - xlsx or csv
+    :type format: str
+    :raises NotImplementedError: Error to bring the run to a halt.
+    """
+    test_path = Path("output", f"test.{format}")
+
+    close_excel_workbook_if_open(test_path)
+    df.to_excel(test_path, engine="xlsxwriter", index=show_index)
+
+    open_file_in_excel(test_path)
+    if error_flag:
+        raise NotImplementedError
+
+
+def open_file_in_excel(filepath: Path) -> None:
+    """
+    Open up Excel file
+
+    :param filepath: Path to the file to check
+    :type filepath: Path
+    """
+    # xw.App(visible=True)
+    xw.Book(filepath)
+
+
+def close_excel_workbook_if_open(filepath: Path) -> None:
+    """
+    Close an open Excel document if it is open.
+
+    :param filepath: Path to the file to check.
+    :type filepath: Path
+    """
+    # Try to connect to a running Excel instance
+    try:
+        app = xw.apps.active
+    except AttributeError:
+        # Excel not running
+        return
+
+    # Check if there is an instance of Excel
+    if not app:
+        return
+
+    # Resolve the file path for robust comparison
+    target_path = filepath.resolve()
+
+    # Iterate through open workbooks
+    for wb in app.books:
+        try:
+            open_path = Path(wb.fullname).resolve()
+            if target_path == open_path:
+                # close workbook
+                wb.close()
+                return
+        except OSError:
+            # If a workbook has no associated file, skip it
+            continue
