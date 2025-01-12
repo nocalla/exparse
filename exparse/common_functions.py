@@ -32,7 +32,45 @@ def regex_substitution(text: str, substitutions: list[tuple]) -> str:
     return text
 
 
-def test_current_data(text: str, error_flag: bool = False) -> None:
+def text_data_to_dataframe(
+    text: str, id: str, headings: list[str]
+) -> pd.DataFrame:
+    """
+    Converts a string into a dataframe through use of a regex to split the string into chunks based on an ID and then by applying a regex search using a list of headings contained within the text.
+
+    :param text: string to convert to dataframe
+    :type text: str
+    :param id: ID string to group the data by
+    :type id: str
+    :param headings: list of headings contained within each group
+    :type headings: list[str]
+    :return: dataframe containing each ID as a row and the list of headings as columns
+    :rtype: pd.DataFrame
+    """
+    # split the data into groups based on ID
+    groups = re.split(f"(?={id})", text)
+
+    heading_pattern = "|".join(re.escape(key) for key in headings)
+    all_entries = list()
+    for group in groups:
+        # capture data to a dict using a list of headings
+        split_data = re.split(r"(" + heading_pattern + r")", group)
+        string_dict = dict()
+        current_key = None
+        for part in split_data:
+            if part in headings:
+                current_key = part
+            elif current_key:
+                string_dict[current_key] = part.strip()
+                current_key = None
+        all_entries.append(string_dict)
+
+    df = pd.DataFrame(all_entries)
+    df.dropna(how="all", axis="index", inplace=True)
+    return df
+
+
+def debug_test_current_data(text: str, error_flag: bool = False) -> None:
     """
     Debugging function to test the current state of a string being worked on
     by writing it to a text file.
