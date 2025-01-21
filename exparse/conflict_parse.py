@@ -4,8 +4,7 @@ import pandas as pd
 
 from .common_functions import (
     file_to_dataframe,
-    infer_table_structure,
-    parse_table_from_text,
+    parse_fixed_width_table_from_text,
 )
 
 
@@ -234,15 +233,9 @@ def parse_subtables(
             cols_to_drop.append(column)
             subtable_text = str(row[column])
 
-            # Infer headers, content, and column boundaries
-            headers, content_lines, column_boundaries = infer_table_structure(
-                subtable_text
-            )
             # Parse subtable into a DataFrame
-            parsed_df = parse_table_from_text(
-                headers=headers,
-                content_lines=content_lines,
-                column_boundaries=column_boundaries,
+            parsed_df = parse_fixed_width_table_from_text(
+                table_text=subtable_text,
                 exclude_columns=sub_cols_to_drop,
             )
 

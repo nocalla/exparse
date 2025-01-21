@@ -233,22 +233,15 @@ def process_dataframe_linebreaks(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def parse_table_from_text(
-    headers: list[str],
-    content_lines: list[str],
-    column_boundaries: list[int],
+def parse_fixed_width_table_from_text(
+    table_text: str,
     account_for_linebreaks: bool = True,
     exclude_columns: list[str] = [],
 ) -> pd.DataFrame:
     """
-    Parse a table from text using the provided headers, content lines, and column boundaries.
+    Parse a fixed width table from text to a dataframe.
 
-    :param headers: list of column headers
-    :type headers: list[str]
-    :param content_lines: list of lines containing the table content
-    :type content_lines: list[str]
-    :param column_boundaries: list of integers representing the column boundaries
-    :type column_boundaries: list[int]
+    :param subtable_text: String containing the table to parse.
     :param account_for_linebreaks: whether or not to account for linebreaks within cells, defaults to True
     :type account_for_linebreaks: bool, optional
     :param exclude_columns: list of columns to ignore from table, defaults to an empty list
@@ -256,6 +249,11 @@ def parse_table_from_text(
     :return: Dataframe containing the parsed table
     :rtype: pd.DataFrame
     """
+
+    # Infer headers, content, and column boundaries
+    headers, content_lines, column_boundaries = infer_table_structure(
+        table_text
+    )
 
     rows = []
     for line in content_lines:
