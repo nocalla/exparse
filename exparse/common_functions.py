@@ -8,21 +8,13 @@ import xlwings as xw
 def file_to_dataframe(
     file: Path, headings: list[str], id: str, replace: list[tuple[str, str]]
 ):
-    # Regex patterns to match headers and blank lines
-    COMMON_CLEANUP_REGEX = [
-        (r"^\s*\n", ""),
-        (r"\*LIVE\* .*\n.*\n.*", ""),
-        (r"\*LSTD\* .*\n.*\n.*", ""),
-        (r"\*TEST\* .*\n.*\n.*", ""),
-        (r"\*TSTD\* .*\n.*\n.*", ""),
-    ]
+
     # Read the text file
     with open(file, "r") as f:
         data = f.read()
 
     # cleanup file
-    patterns = COMMON_CLEANUP_REGEX + replace
-    data = regex_substitution(data, patterns)
+    data = regex_substitution(data, replace)
     debug_test_current_data(data)
     # convert to dataframe
     df = text_data_to_dataframe(text=data, id=id, headings=headings)
@@ -30,6 +22,19 @@ def file_to_dataframe(
 
 
 def regex_substitution(text: str, substitutions: list[tuple]) -> str:
+    # Regex patterns to match headers and blank lines
+    common_cleanup_regex = [
+        (r"^\s*\n", ""),
+        (r"[^\x00-\x7F]+", ""),
+        (r"^-+\n", ""),
+        (r"^\*LIVE\*.*\n.*\n.*", ""),
+        (r"^\*LSTD\*.*\n.*\n.*", ""),
+        (r"^\*TEST\*.*\n.*\n.*", ""),
+        (r"^\*TSTD\*.*\n.*\n.*", ""),
+        (r"DATE:.*\n", ""),
+        (r"USER:.*\n", ""),
+    ]
+    substitutions = common_cleanup_regex + substitutions
     # Apply all match subtitutions to the text
     for regex, replacement in substitutions:
         text = re.sub(regex, replacement, text, flags=re.MULTILINE)
