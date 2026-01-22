@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common_functions import regex_substitution
+from common_functions import regex_substitution
 
 
 def parse_order_strings(file: Path) -> pd.DataFrame:

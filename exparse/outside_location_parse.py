@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common_functions import file_to_dataframe
+from common_functions import file_to_dataframe
 
 
 def parse_locations(file: Path) -> pd.DataFrame:

@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from .conflict_parse import parse_conflicts
-from .direction_parse import parse_directions
-from .dosing_set_parse import parse_dosing_sets
-from .order_string_parse import parse_order_strings
-from .outside_location_parse import parse_locations
-from .solarwinds_parse import parse_solarwinds
-from .unit_of_measure_parse import parse_units
+from conflict_parse import parse_conflicts
+from direction_parse import parse_directions
+from dosing_set_parse import parse_dosing_sets
+from order_string_parse import parse_order_strings
+from outside_location_parse import parse_locations
+from solarwinds_parse import parse_solarwinds
+from unit_of_measure_parse import parse_units
 
 SEARCH_FILENAMES = {
     "dosing_sets": ["dosing", parse_dosing_sets],
@@ -54,6 +54,7 @@ def export_dfs_to_excel(dfs: list[tuple]) -> None:
 
 
 def main() -> None:
+    # TODO - create input/output folders if needed
     file_dict = get_file_list(SEARCH_FILENAMES)
     print(f"Parsing files: {file_dict}")  # debug
     dataframes = list()

@@ -125,7 +125,7 @@ def parse_dosing_sets(file: Path) -> pd.DataFrame:
     # NB: this will break in a future version of pandas
     df = df.apply(
         pd.to_numeric,
-        errors="ignore",
+        errors="coerce",
     )
     # print(df.dtypes)
     # drop rows and columns where all values are missing

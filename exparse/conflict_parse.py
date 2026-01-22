@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common_functions import (
+from common_functions import (
     file_to_dataframe,
     parse_fixed_width_table_from_text,
 )

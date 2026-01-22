@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common_functions import (
+from common_functions import (
     parse_fixed_width_table_from_text,
     regex_substitution,
 )
