@@ -3,9 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 
-
 def parse_dosing_sets(file: Path) -> pd.DataFrame:
-
     headers = [
         "Dosing Set",
         "PHA Site",
@@ -125,7 +123,7 @@ def parse_dosing_sets(file: Path) -> pd.DataFrame:
     # NB: this will break in a future version of pandas
     df = df.apply(
         pd.to_numeric,
-        errors="coerce",
+        errors="ignore",
     )
     # print(df.dtypes)
     # drop rows and columns where all values are missing
