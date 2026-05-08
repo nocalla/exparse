@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from common_functions import file_to_dataframe
+from common_functions import file_to_dataframe, strip_whitespace
 
 
 def parse_directions(file: Path) -> pd.DataFrame:
@@ -31,28 +31,25 @@ def parse_directions(file: Path) -> pd.DataFrame:
     ]
 
     patterns = [
-        (r"^Facility.*", ""),
+        (r"^\s*Facility.*", ""),
         (r"^\s*\n", ""),
         ("Day Schedule Display", "DayScheduleDisplay"),
         (r"(Mnemonic.*?)(\s+)Name", r"\1\2Direction Name"),
         (r"(Location.*?)(\s+)Name", r"\1\2Equiv Name"),
     ]
     df = file_to_dataframe(
-        file=file, id="Mnemonic", headings=HEADINGS, replace=patterns
+        file=file, record_id="Mnemonic", headings=HEADINGS, replace=patterns
     )
-    df.dropna(how="all", axis="index", inplace=True)
+    df = df.dropna(how="all", axis="index")
 
     facilities = ["MPAC", "MPAD", "MPC", "MPD"]
     facility_headers = [
-        # "Facility",
-        # "Active",
         "Application",
         "Use Day Schedule from Start Time",
         "Time",
         "Special Time",
     ]
 
-    # facility_col_regex = r"\s*(?P<Application>.{13})(?P<UseDayScheduleFromStartTime>.{3})(?P<Time>.{5})(?P<SpecialTime>.*)"
     facility_col_regex = (
         r"^\s*(?P<Application>[A-Za-z.]+)?"  # Application is optional
         r"(?:\s+(?P<UseDayScheduleFromStartTime>Yes))?"  # UseDaySchedule is optional
@@ -60,7 +57,7 @@ def parse_directions(file: Path) -> pd.DataFrame:
         r"(?:\s+(?P<SpecialTime>.+))?$"  # SpecialTime is optional
     )
 
-    facilities_df = pd.DataFrame()
+    facility_frames = []
     for facility in facilities:
         # create separate facility dataframe
         facility_df = df[["Mnemonic", facility]].copy()
@@ -77,12 +74,8 @@ def parse_directions(file: Path) -> pd.DataFrame:
         facility_df[facility] = (
             facility_df[facility].astype(str).str.ljust(100)
         )
-        # split into columns based on regex
         facility_df[facility_headers] = (
-            # facility_df = (
-            facility_df[facility]
-            .astype(str)
-            .str.extract(facility_col_regex)
+            facility_df[facility].astype(str).str.extract(facility_col_regex)
         )
         # fill in blank applications
         facility_df["Application"] = facility_df["Application"].ffill()
@@ -96,8 +89,9 @@ def parse_directions(file: Path) -> pd.DataFrame:
         facility_df.drop_duplicates(
             subset=["Mnemonic", "Application"], inplace=True
         )
-        # add this facility's data to the list of facilities
-        facilities_df = pd.concat([facilities_df, facility_df])
+        facility_frames.append(facility_df)
+
+    facilities_df = pd.concat(facility_frames, ignore_index=True)
 
     # remove facility detail column
     facilities_df.drop(columns=facilities, inplace=True)
@@ -105,7 +99,5 @@ def parse_directions(file: Path) -> pd.DataFrame:
     # merge facility specific data back to main direction data
     df = pd.merge(df, facilities_df, how="left", on="Mnemonic")
 
-    # remove leading and trailing whitespace for entire dataframe
-    for col in df.columns:
-        df[col] = df[col].str.strip(" ")
+    df = strip_whitespace(df)
     return df

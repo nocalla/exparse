@@ -18,7 +18,7 @@ def parse_units(file: Path) -> pd.DataFrame:
         "Conversion Factor",
         "Code Type",
         "Code",
-        "Name",
+        "Code Name",
     ]
     patterns = [
         (r".*Equivalent   Conversion", ""),
@@ -33,7 +33,7 @@ def parse_units(file: Path) -> pd.DataFrame:
     df.columns = HEADINGS
     # get rid of rows that are just headers
     df = df[df["Mnemonic"] != "Mnemonic"]
-    df.replace("", pd.NA, inplace=True)
-    df.ffill(inplace=True)
+    df = df.replace("", pd.NA)
+    df = df.ffill()
 
     return df

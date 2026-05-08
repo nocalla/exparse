@@ -9,78 +9,57 @@ from common_functions import (
 
 
 def parse_conflicts(file: Path) -> pd.DataFrame:
-    heading_groups = [
-        [
-            "Main",
-            [
-                "Mnemonic",
-                "Name",
-                "Valid For",
-            ],
+    heading_groups: dict[str, list[str]] = {
+        "Main": [
+            "Mnemonic",
+            "Name",
+            "Valid For",
         ],
-        [
-            "Dose Checking",
-            [
-                "Use Dose Range Checking",
-                "Dose Range Check Requires Override",
-                "Restrict PRN Dose Checks",
-                "Restrict Frequency Checks",
-                "Allowed Low Rounding Percent",
-                "Allowed Max Rounding Percent",
-                "Restrict General Warnings",
-                "Restrict Dose Type",  # TODO modify this - the Default parameter is attached within the schedule to a dose type
-                "Restrict Dose Range Check to Dose Type",
-            ],
+        "Dose Checking": [
+            "Use Dose Range Checking",
+            "Dose Range Check Requires Override",
+            "Restrict PRN Dose Checks",
+            "Restrict Frequency Checks",
+            "Allowed Low Rounding Percent",
+            "Allowed Max Rounding Percent",
+            "Restrict General Warnings",
+            "Restrict Dose Type",  # TODO: Default parameter is attached within the schedule to a dose type
+            "Restrict Dose Range Check to Dose Type",
         ],
-        [
-            "Drug Screening",
-            [
-                "Drug Screening Conflicts",
-                "Drug Screening Warnings",
-                "Problem Status to Include in Screening",
-                "Ignore Pharmacogenomic results for 'Consider Testing'",
-            ],
+        "Drug Screening": [
+            "Drug Screening Conflicts",
+            "Drug Screening Warnings",
+            "Problem Status to Include in Screening",
+            "Ignore Pharmacogenomic results for 'Consider Testing'",
         ],
-        [
-            "Visit Med Preferences",
-            [
-                "Allow Interaction Auto-Override Acute",
-                "Check Against DC'd Orders",
-                "DC'd Within How Many Days",
-                "Check Interactions Against Home Medications",
-                "Check Duplicates Against Home Medications",
-                "Stop Checking Home Medications After LOS Days",
-                "Exclude Medications on Other Visits from Interaction Checks",
-                "Exclude Medications on Other Visits from Duplicate Checks",
-                "Exclude Medications on Other Visits after LOS Days",
-                "Hide Comments When Not Required",
-            ],
+        "Visit Med Preferences": [
+            "Allow Interaction Auto-Override Acute",
+            "Check Against DC'd Orders",
+            "DC'd Within How Many Days",
+            "Check Interactions Against Home Medications",
+            "Check Duplicates Against Home Medications",
+            "Stop Checking Home Medications After LOS Days",
+            "Exclude Medications on Other Visits from Interaction Checks",
+            "Exclude Medications on Other Visits from Duplicate Checks",
+            "Exclude Medications on Other Visits after LOS Days",
+            "Hide Comments When Not Required",
         ],
-        [
-            "Discharge Home Med Preferences",
-            [
-                "Allow Interaction Auto-Override Amb",
-                "Exclude Acute Medications on Same Visit from Interaction Checks",
-                "Exclude Acute Medications on Same Visit from Duplicate Checks",
-            ],
+        "Discharge Home Med Preferences": [
+            "Allow Interaction Auto-Override Amb",
+            "Exclude Acute Medications on Same Visit from Interaction Checks",
+            "Exclude Acute Medications on Same Visit from Duplicate Checks",
         ],
-        [
-            "Allergy Checking Preferences",
-            [
-                "Check Supplemental Allergens",
-            ],
+        "Allergy Checking Preferences": [
+            "Check Supplemental Allergens",
         ],
-        [
-            "Immunisation Preferences",
-            [
-                "Check Immunization Conflicts",
-                "Immunization Conflict Requires Override",
-                "Check Immunization Schedule Conflicts",
-                "Immunization Schedule Conflict Requires Override",
-                "Check Interactions for Not Given",
-            ],
+        "Immunisation Preferences": [
+            "Check Immunization Conflicts",
+            "Immunization Conflict Requires Override",
+            "Check Immunization Schedule Conflicts",
+            "Immunization Schedule Conflict Requires Override",
+            "Check Interactions for Not Given",
         ],
-    ]
+    }
     regex_replacements = [
         ("Preferences", ""),
         ("Immunizations", ""),
@@ -128,16 +107,16 @@ def parse_conflicts(file: Path) -> pd.DataFrame:
     ]
 
     headings_to_extract = [
-        item for _, group in heading_groups for item in group
+        item for group in heading_groups.values() for item in group
     ]
     heading_parents = {
-        item: parent for parent, group in heading_groups for item in group
+        item: parent for parent, group in heading_groups.items() for item in group
     }
 
     df = file_to_dataframe(
         file=file,
         headings=headings_to_extract,
-        id="Mnemonic",
+        record_id="Mnemonic",
         replace=regex_replacements,
     )
 
@@ -199,14 +178,18 @@ def parse_conflicts(file: Path) -> pd.DataFrame:
     ]
     df = df.reindex(
         columns=pd.MultiIndex.from_tuples(
-            sorted(df.columns, key=lambda x: section_order.index(x[0])),
+            sorted(
+                df.columns,
+                key=lambda x: section_order.index(x[0])
+                if x[0] in section_order
+                else len(section_order),
+            ),
             names=["Section", "Parameter"],
         )
     )
     # transpose dataframe
     df = df.T
 
-    # debug_test_dataframe(df, show_index=True)
     return df
 
 
@@ -223,14 +206,12 @@ def parse_subtables(
     :return: Tuple containing the updated DataFrame and a list pairings of new columns to their parent columns
     :rtype: tuple[pd.DataFrame, list[tuple[str, str]]]
     """
-    # Initialize a list to store flattened data
+    cols_to_drop = [column for column, _ in columns]
     flattened_data = []
     new_parent_pairings = []
-    cols_to_drop = []
     for _, row in df.iterrows():
         flattened_row = {df.index.name: row.name}
         for column, sub_cols_to_drop in columns:
-            cols_to_drop.append(column)
             subtable_text = str(row[column])
 
             # Parse subtable into a DataFrame

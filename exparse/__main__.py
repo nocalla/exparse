@@ -1,4 +1,7 @@
+import logging
+from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Callable
 
 import pandas as pd
 
@@ -10,43 +13,54 @@ from outside_location_parse import parse_locations
 from solarwinds_parse import parse_solarwinds
 from unit_of_measure_parse import parse_units
 
-SEARCH_FILENAMES = {
-    "dosing_sets": ["dosing", parse_dosing_sets],
-    "order_strings": ["order_string", parse_order_strings],
-    "directions": ["direction", parse_directions],
-    "outside_locations": ["location", parse_locations],
-    "conflicts": ["conflict", parse_conflicts],
-    "unit_of_measure": ["unit", parse_units],
-    "solarwinds": ["solarwinds", parse_solarwinds],
+log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ParserConfig:
+    filename_fragment: str
+    parser: Callable[[Path], pd.DataFrame]
+
+
+SEARCH_FILENAMES: dict[str, ParserConfig] = {
+    "dosing_sets": ParserConfig("dosing", parse_dosing_sets),
+    "order_strings": ParserConfig("order_string", parse_order_strings),
+    "directions": ParserConfig("direction", parse_directions),
+    "outside_locations": ParserConfig("location", parse_locations),
+    "conflicts": ParserConfig("conflict", parse_conflicts),
+    "unit_of_measure": ParserConfig("unit", parse_units),
+    "solarwinds": ParserConfig("solarwinds", parse_solarwinds),
 }
 
 
-def get_file_list(search_params: dict[str, list]) -> dict[str, tuple]:
-    # Get files from the "input" folder
+def get_file_list(
+    search_params: dict[str, ParserConfig],
+) -> dict[str, tuple[Path, Callable[[Path], pd.DataFrame]]]:
     files = [f for f in Path("input").iterdir() if f.is_file()]
-    file_mapping = dict()
+    file_mapping: dict[str, tuple[Path, Callable[[Path], pd.DataFrame]]] = {}
 
-    # Loop through the search dictionary
-    for key, params in search_params.items():
-        # Find the file that contains the relevant search value
-        matching_file = next((f for f in files if params[0] in f.stem), None)
-
-        # If a matching file is found, map the key to the file path and relevant function
+    for key, config in search_params.items():
+        matching_file = next(
+            (f for f in files if config.filename_fragment in f.stem), None
+        )
         if matching_file:
-            file_mapping[key] = (matching_file, params[1])
+            file_mapping[key] = (matching_file, config.parser)
 
     return file_mapping
 
 
-def parse_file(category: str, file_path: Path, func) -> pd.DataFrame | None:
-    print(f"Parsing {category} dictionary...")
-    if func == None:
-        return pd.DataFrame()
+def parse_file(
+    category: str,
+    file_path: Path,
+    func: Callable[[Path], pd.DataFrame],
+) -> pd.DataFrame:
+    log.info("Parsing %s dictionary...", category)
     return func(file=file_path)
 
 
-def export_dfs_to_excel(dfs: list[tuple]) -> None:
-    filename = f"{"_".join([pairing[0] for pairing in dfs])}_dict_export.xlsx"
+def export_dfs_to_excel(dfs: list[tuple[str, pd.DataFrame]]) -> None:
+    sheet_names = "_".join(pairing[0] for pairing in dfs)
+    filename = f"{sheet_names}_dict_export.xlsx"
     output_path = Path("output", filename)
     with pd.ExcelWriter(output_path) as writer:
         for sheetname, df in dfs:
@@ -54,18 +68,25 @@ def export_dfs_to_excel(dfs: list[tuple]) -> None:
 
 
 def main() -> None:
-    # TODO - create input/output folders if needed
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    Path("input").mkdir(exist_ok=True)
+    Path("output").mkdir(exist_ok=True)
+
     file_dict = get_file_list(SEARCH_FILENAMES)
-    print(f"Parsing files: {file_dict}")  # debug
-    dataframes = list()
-    for category in file_dict.keys():
-        dataframes.append(
-            (category, parse_file(category, *file_dict[category]))
-        )
+    log.debug("Files found: %s", file_dict)
+    dataframes: list[tuple[str, pd.DataFrame]] = []
+    for category, (file_path, func) in file_dict.items():
+        try:
+            dataframes.append((category, parse_file(category, file_path, func)))
+        except Exception:
+            log.exception("Failed to parse %s — skipping", category)
 
     export_dfs_to_excel(dataframes)
 
 
 if __name__ == "__main__":
     main()
-    print("Done!")
+    log.info("Done!")

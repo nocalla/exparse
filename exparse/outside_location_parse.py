@@ -12,13 +12,13 @@ def parse_locations(file: Path) -> pd.DataFrame:
         "Active",
         "Address",
         "Phone",
-        "Addres2",  # renamed Address 2
+        "Address2",
         "Direct Address",
         "Town/City",
         "Fax",
         "Type",
         "County",
-        "FaAttention",  # renamed Fax Attention
+        "FaxAttention",
         "Eircode",
         "Default Send Cover Page",
         "Contact",
@@ -28,7 +28,8 @@ def parse_locations(file: Path) -> pd.DataFrame:
         "NCPDP Identifier",
         "Open 24 hours",
         "Accepts eRx",
-        "EPCS" "OV Source",
+        "EPCS",
+        "OV Source",
         "OV Source ID",
         "Mail Order",
         "Payer ID",
@@ -37,16 +38,13 @@ def parse_locations(file: Path) -> pd.DataFrame:
         "Description",
     ]
     patterns = [
-        (r"Address 2", "Addres2"),
-        (r"Fax Attention", "FaAttention"),
+        (r"Address 2", "Address2"),
+        (r"Fax Attention", "FaxAttention"),
     ]
     df = file_to_dataframe(
-        file=file, id="Mnemonic", headings=HEADINGS, replace=patterns
+        file=file, record_id="Mnemonic", headings=HEADINGS, replace=patterns
     ).fillna("MISSING")
 
-    # filter for just pharmacy entries
     df = df[df["Mnemonic"].str.contains("PHA.")]
-
-    # debug_test_dataframe(df, error_flag=True)
 
     return df

@@ -1,6 +1,14 @@
+import logging
 from pathlib import Path
 
 import pandas as pd
+
+from common_functions import strip_whitespace
+
+log = logging.getLogger(__name__)
+
+FILTER_CHAR = "~"
+SET_DELIMITER = "SET DELIMITER"
 
 
 def parse_dosing_sets(file: Path) -> pd.DataFrame:
@@ -42,49 +50,34 @@ def parse_dosing_sets(file: Path) -> pd.DataFrame:
         "Creatinine Clearance",
     ]
 
-    print("Reading file")
+    log.debug("Reading file")
     with open(file) as f:
         lines = f.read()
     # Get dosing set name on the same row as the header
     lines = lines.replace("Dosing Set\n", "Dosing Set ")
 
-    # rename unit based headers to avoid confusion
     lines = lines.replace("Dose Unit", "Dosage Unit")
-    # remove commas
     lines = lines.replace(",", "")
-    temp_headers = list()
-    for header in headers:
-        temp_headers.append(header.replace("Dose Unit", "Dosage Unit"))
-    headers = temp_headers
+    headers = [h.replace("Dose Unit", "Dosage Unit") for h in headers]
 
     # TODO - get the dosing group into a column - no idea how
 
-    print("Filtering relevant rows")
-    filter_char = "~"
-    unspaced_headers = list()
+    log.debug("Filtering relevant rows")
+    unspaced_headers = []
     for header in headers:
-        # take all the spaces out of the column headers where they occur in the file
         header_unspaced = header.replace(" ", "")
-        # create a list of unspaced headers for use later
         unspaced_headers.append(header_unspaced)
-        # mark each row with a character for filtering
-        lines = lines.replace(header, f"{filter_char}{header_unspaced}")
+        lines = lines.replace(header, f"{FILTER_CHAR}{header_unspaced}")
 
-    # convert the string to a list
     rows = lines.split("\n")
-    # filter rows using the filter_char to just get rows with the desired headings
     filtered_rows = [
-        row.strip()[1:] for row in rows if row.strip().startswith(filter_char)
+        row.strip()[1:] for row in rows if row.strip().startswith(FILTER_CHAR)
     ]
-    # convert the rows back into a string
     new_lines = "\n".join(filtered_rows)
 
-    # split into dosing set chunks
-    set_delimiter = "SET DELIMITER"
-    new_lines = new_lines.replace(unspaced_headers[0], set_delimiter)
-    chunk_list = new_lines.split(set_delimiter)
-    dosing_set_list = list()
-    header_tuple = tuple(unspaced_headers)
+    new_lines = new_lines.replace(unspaced_headers[0], SET_DELIMITER)
+    chunk_list = new_lines.split(SET_DELIMITER)
+    dosing_set_list = []
     for chunk in chunk_list:
         # re-add the DosingSet header
         chunk = unspaced_headers[0] + chunk
@@ -100,40 +93,18 @@ def parse_dosing_sets(file: Path) -> pd.DataFrame:
 
         dosing_set_list.append(set_dict)
 
-    # convert to dataframe
     df = pd.DataFrame(dosing_set_list)
+    df = strip_whitespace(df)
 
-    # strip leading and trailing whitespace from all columns
-    for column in df.columns:
-        df[column] = df[column].str.strip()
+    df[["DosingSet", "SetName"]] = df["DosingSet"].str.split(" ", n=1, expand=True)
+    df[["DrugMnemonic", "Drug"]] = df["Drug"].str.split(" - ", n=1, expand=True)
 
-    # split columns where needed
-    df[["DosingSet", "SetName"]] = df["DosingSet"].str.split(
-        " ", n=1, expand=True
-    )
-    df[["DrugMnemonic", "Drug"]] = df["Drug"].str.split(
-        " - ", n=1, expand=True
-    )
+    df = strip_whitespace(df)
 
-    # strip leading and trailing whitespace from all columns again
-    for column in df.columns:
-        df[column] = df[column].str.strip()
-
-    # convert numeric strings to numeric datatypes
-    # NB: this will break in a future version of pandas
-    df = df.apply(
-        pd.to_numeric,
-        errors="ignore",
-    )
-    # print(df.dtypes)
-    # drop rows and columns where all values are missing
+    for col in df.columns:
+        converted = pd.to_numeric(df[col], errors="coerce")
+        df[col] = converted.where(converted.notna(), df[col])
     df.dropna(axis="index", how="all", inplace=True)
     df.dropna(axis="columns", how="all", inplace=True)
 
-    # print(df.head())  # debug
-
     return df
-
-
-# if __name__ == "__main__":
-#     parse_dosing_sets(FILE)

@@ -6,65 +6,73 @@ import xlwings as xw
 
 
 def file_to_dataframe(
-    file: Path, headings: list[str], id: str, replace: list[tuple[str, str]]
-):
-
-    # Read the text file
+    file: Path,
+    headings: list[str],
+    record_id: str,
+    replace: list[tuple[str, str]],
+) -> pd.DataFrame:
     with open(file, "r") as f:
         data = f.read()
 
-    # cleanup file
     data = regex_substitution(data, replace)
-    debug_test_current_data(data)
-    # convert to dataframe
-    df = text_data_to_dataframe(text=data, id=id, headings=headings)
+    df = text_data_to_dataframe(text=data, record_id=record_id, headings=headings)
     return df
 
 
-def regex_substitution(text: str, substitutions: list[tuple]) -> str:
-    # Regex patterns to match headers and blank lines
+def regex_substitution(text: str, substitutions: list[tuple[str, str]]) -> str:
     common_cleanup_regex = [
+        # Meditech uses \f (form feed, 0x0C) as a page separator, often mid-line
+        # before the *LSTD*/*LIVE* header. Normalise to \n so the header patterns
+        # below can match at the start of a line.
+        (r"\f", "\n"),
+        # Strip other illegal control characters (openpyxl rejects 0x00-0x08, 0x0B, 0x0E-0x1F)
+        (r"[\x00-\x08\x0B\x0E-\x1F]", ""),
         (r"^\s*\n", ""),
         (r"[^\x00-\x7F]+", ""),
         (r"^-+\n", ""),
-        (r"^\*LIVE\*.*\n.*\n.*", ""),
-        (r"^\*LSTD\*.*\n.*\n.*", ""),
-        (r"^\*TEST\*.*\n.*\n.*", ""),
-        (r"^\*TSTD\*.*\n.*\n.*", ""),
+        (r"^\s*\*LIVE\*.*\n.*\n.*", ""),
+        (r"^\s*\*LSTD\*.*\n.*\n.*", ""),
+        (r"^\s*\*TEST\*.*\n.*\n.*", ""),
+        (r"^\s*\*TSTD\*.*\n.*\n.*", ""),
         (r"DATE:.*\n", ""),
         (r"USER:.*\n", ""),
     ]
     substitutions = common_cleanup_regex + substitutions
-    # Apply all match subtitutions to the text
     for regex, replacement in substitutions:
         text = re.sub(regex, replacement, text, flags=re.MULTILINE)
     return text
 
 
+def build_heading_pattern(headings: list[str]) -> str:
+    return "|".join(re.escape(h) for h in headings)
+
+
+def strip_whitespace(df: pd.DataFrame) -> pd.DataFrame:
+    return df.apply(lambda col: col.str.strip() if col.dtype == "object" else col)
+
+
 def text_data_to_dataframe(
-    text: str, id: str, headings: list[str]
+    text: str, record_id: str, headings: list[str]
 ) -> pd.DataFrame:
     """
     Converts a string into a dataframe through use of a regex to split the string into chunks based on an ID and then by applying a regex search using a list of headings contained within the text.
 
     :param text: string to convert to dataframe
     :type text: str
-    :param id: ID string to group the data by
-    :type id: str
+    :param record_id: ID string to group the data by
+    :type record_id: str
     :param headings: list of headings contained within each group
     :type headings: list[str]
     :return: dataframe containing each ID as a row and the list of headings as columns
     :rtype: pd.DataFrame
     """
-    # split the data into groups based on ID
-    groups = re.split(f"(?={id})", text)
+    groups = re.split(f"(?={record_id})", text)
 
-    heading_pattern = "|".join(re.escape(key) for key in headings)
-    all_entries = list()
+    heading_pattern = build_heading_pattern(headings)
+    all_entries = []
     for group in groups:
-        # capture data to a dict using a list of headings
         split_data = re.split(r"(" + heading_pattern + r")", group)
-        string_dict = dict()
+        string_dict = {}
         current_key = None
         for part in split_data:
             if part in headings:
@@ -75,7 +83,7 @@ def text_data_to_dataframe(
         all_entries.append(string_dict)
 
     df = pd.DataFrame(all_entries)
-    df.dropna(how="all", axis="index", inplace=True)
+    df = df.dropna(how="all", axis="index")
     return df
 
 
@@ -84,8 +92,8 @@ def debug_test_current_data(text: str, error_flag: bool = False) -> None:
     Debugging function to test the current state of a string being worked on
     by writing it to a text file.
 
-    :param data: the string to be written to the file
-    :type data: str
+    :param text: the string to be written to the file
+    :type text: str
     :param error_flag: whether or not to raise an error on calling the function
     :type error_flag: bool
     :raises NotImplementedError: Error to bring the run to a halt.
@@ -107,8 +115,8 @@ def debug_test_dataframe(
     Debugging function to test the current state of a dataframe being worked on
     by writing it to an Excel file.
 
-    :param data: the dataframe or series to be written to the file
-    :type data: str
+    :param df: the dataframe or series to be written to the file
+    :type df: pd.DataFrame | pd.Series
     :param error_flag: whether or not to raise an error on calling the function
     :type error_flag: bool
     :param format: the file extension to use - xlsx or csv
@@ -132,7 +140,6 @@ def open_file_in_excel(filepath: Path) -> None:
     :param filepath: Path to the file to check
     :type filepath: Path
     """
-    # xw.App(visible=True)
     xw.Book(filepath)
 
 
@@ -143,30 +150,23 @@ def close_excel_workbook_if_open(filepath: Path) -> None:
     :param filepath: Path to the file to check.
     :type filepath: Path
     """
-    # Try to connect to a running Excel instance
     try:
         app = xw.apps.active
     except AttributeError:
-        # Excel not running
         return
 
-    # Check if there is an instance of Excel
     if not app:
         return
 
-    # Resolve the file path for robust comparison
     target_path = filepath.resolve()
 
-    # Iterate through open workbooks
     for wb in app.books:
         try:
             open_path = Path(wb.fullname).resolve()
             if target_path == open_path:
-                # close workbook
                 wb.close()
                 return
         except OSError:
-            # If a workbook has no associated file, skip it
             continue
 
 
@@ -176,30 +176,25 @@ def infer_table_structure(
     """
     Infer the column headers, content lines, and column boundaries from a string containing a table.
 
-    :param subtable_text: String containing the table to parse.
-    :type subtable_text: str
+    :param table_text: String containing the table to parse.
+    :type table_text: str
     :return: Tuple containing the headers, content lines, and column boundaries.
     :rtype: tuple[list[str], list[str], list[int]]
     """
     lines = table_text.strip().split("\n")
     header_line = lines[0]
     content_lines = lines[1:]
-    longest_line_length = max([len(line) for line in lines])
+    longest_line_length = max(len(line) for line in lines)
 
     # Match words with optional spaces between them, followed by at least 2 whitespaces or the last heading
     pattern = r"\S+(?: \S+)*(?=\s{2,})|\S+(?: \S+)*$"
 
-    # This will match each heading as a sequence of non-whitespace characters
     headings = re.finditer(pattern, header_line)
 
-    # Get the start index for each heading
     column_starts = [match.start() for match in headings]
 
-    column_boundaries = column_starts + [
-        longest_line_length
-    ]  # Add end boundary
+    column_boundaries = column_starts + [longest_line_length]
 
-    # Extract headers by slicing the header line
     headers = [
         header_line[start:end].strip()
         for start, end in zip(column_boundaries[:-1], column_boundaries[1:])
@@ -217,18 +212,13 @@ def process_dataframe_linebreaks(df: pd.DataFrame) -> pd.DataFrame:
     :return: Processed dataframe
     :rtype: pd.DataFrame
     """
-    # account for linebreaks within cells by merging value up to the previous row
-    # Fill empty cells in the first column with the previous value
     first_col_name = df.columns[0]
     df[first_col_name] = df[first_col_name].replace("", pd.NA).ffill()
-    # Concatenate values across all columns based on the first column
     for col in df.columns[1:]:
         df[col] = df.groupby(first_col_name)[col].transform(
             lambda x: " ".join(x.dropna())
         )
-    # Drop rows where the first column was originally empty
     df = df.dropna(subset=[df.columns[0]])
-    # Reset the index for a cleaner result
     df.reset_index(drop=True, inplace=True)
     return df
 
@@ -236,24 +226,23 @@ def process_dataframe_linebreaks(df: pd.DataFrame) -> pd.DataFrame:
 def parse_fixed_width_table_from_text(
     table_text: str,
     account_for_linebreaks: bool = True,
-    exclude_columns: list[str] = [],
+    exclude_columns: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Parse a fixed width table from text to a dataframe.
 
-    :param subtable_text: String containing the table to parse.
+    :param table_text: String containing the table to parse.
     :param account_for_linebreaks: whether or not to account for linebreaks within cells, defaults to True
     :type account_for_linebreaks: bool, optional
-    :param exclude_columns: list of columns to ignore from table, defaults to an empty list
-    :type account_for_linebreaks: list, optional
+    :param exclude_columns: list of columns to ignore from table, defaults to None
+    :type exclude_columns: list[str] | None, optional
     :return: Dataframe containing the parsed table
     :rtype: pd.DataFrame
     """
+    if exclude_columns is None:
+        exclude_columns = []
 
-    # Infer headers, content, and column boundaries
-    headers, content_lines, column_boundaries = infer_table_structure(
-        table_text
-    )
+    headers, content_lines, column_boundaries = infer_table_structure(table_text)
 
     rows = []
     for line in content_lines:
@@ -265,7 +254,6 @@ def parse_fixed_width_table_from_text(
         ]
         rows.append(row)
 
-    # Convert to DataFrame
     df = pd.DataFrame(rows, columns=headers)
     df.drop(labels=exclude_columns, axis=1, errors="ignore", inplace=True)
     if account_for_linebreaks:
